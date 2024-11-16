@@ -16,6 +16,37 @@ app.use(cors(
 ));
 app.use(express.json());
 
+
+//  token verification
+const verifyJWT = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    console.log(authHeader);
+    if (!authHeader) {
+        return res.status(401).send({ message: 'Unauthorized Access' });
+    }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(403).send({ message: 'Forbidden Access' });
+        }
+        req.decoded = decoded;
+        next();
+    });
+}
+
+
+// verify seller
+const verifySeller = async (req, res, next) => {
+    const email = req.decoded.email;
+    const query = { email: email };
+    const user = await usersCollection.findOne(query);
+    if (user?.role !== 'seller') {
+        return res.status(403).send({ message: 'forbidden access' });
+    }
+    next();
+}
+
+
 // mongoDB
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.oldlbnp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -30,7 +61,7 @@ const client = new MongoClient(uri, {
 
 // Collection
 const usersCollection = client.db('gadgetShop').collection('users');
-const proDuctCollection = client.db('gadgetShop').collection('products');
+const productCollection = client.db('gadgetShop').collection('products');
 
 
 
@@ -60,6 +91,14 @@ const dbConnect = async () => {
             const result = await usersCollection.insertOne(user);
             res.send(result);
         });
+
+        // add product 
+        app.post('/add-products', verifyJWT, verifySeller, async (req, res) => {
+            const product = req.body;
+            const result = await productCollection.insertOne(product);
+            res.send(result);
+        });
+
       
 
     } catch (error) {
